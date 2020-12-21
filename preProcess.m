@@ -1,5 +1,8 @@
 function puzzlePiece = preProcess(number, filename)
+    %The number of the puzzle piece that failed to extract the vertex correctly
     exceptions = [14, 15, 62, 101];
+    
+    %Crop and grayscale the image
     I=imread(filename);
     I=rgb2gray(I);
     RECT = [1300,500,1500,1500];
@@ -7,56 +10,45 @@ function puzzlePiece = preProcess(number, filename)
     I= medfilt2(I);
     %figure;imshow(I);title('I');
 
+    %Binarize the image
     BW = ~imbinarize(I, graythresh(I));
     BW = bwareaopen(BW,100);
     BW = imfill(BW, 'holes');
     %figure;imshow(BW);title('BW');
 
+    %Get boundary
     edge = boundarymask(BW);
     %figure;imshow(edge);title('edge');
 
+    %Get vertices
     [pointc, pointr] = find(edge);
-    %[posr, posc] = HarrisPoints(edge,0.1);
-    %points = detectMinEigenFeatures(edge,'MinQuality',0.6);
+    %points = detectHarrisFeatures(edge,'MinQuality',0.6);
     %pointr = round(points.Location(:,1));
     %pointc = round(points.Location(:,2));
-
     %figure
     %imshow(edge);
     %hold on;
     %plot(pointr,pointc,'w*');
-
-    %Get vertices
     upperLeft = getVertex(pointr,pointc);
     upperRight = getVertex(pointr*(-1),pointc);
     lowerLeft = getVertex(pointr,pointc*(-1));
     lowerRight = getVertex(pointr*(-1),pointc*(-1));
     
+    %Manually select vertices
     if ismember(number, exceptions)
         imshow(edge);
         title('Please point out the vertices of this puzzle piece clockwise starting from the upper left, and then press enter.');
         [row,col] = getpts();
-        upperLeft = getVertexFromSelections(pointr,pointc,row(1),col(1));
-        upperRight = getVertexFromSelections(pointr,pointc,row(2),col(2));
-        lowerRight = getVertexFromSelections(pointr,pointc,row(3),col(3));
-        lowerLeft = getVertexFromSelections(pointr,pointc,row(4),col(4));
+        upperLeft = getVertexFromUser(pointr,pointc,row(1),col(1));
+        upperRight = getVertexFromUser(pointr,pointc,row(2),col(2));
+        lowerRight = getVertexFromUser(pointr,pointc,row(3),col(3));
+        lowerLeft = getVertexFromUser(pointr,pointc,row(4),col(4));
         close;
     end
 
     %Get the two diagonals
     diagonalTLToBR = getLineEquation(upperLeft,lowerRight);
     diagonalBLToTR = getLineEquation(lowerLeft,upperRight);
-
-    if 0
-    figure
-    imshow(edge);
-    hold on;
-    plot(upperLeft(1),upperLeft(2),'*');
-    plot(upperRight(1),upperRight(2),'*');
-    plot(lowerLeft(1),lowerLeft(2),'*');
-    plot(lowerRight(1),lowerRight(2),'*');
-    title(['puzzle piece ',num2str(number)]);
-    end
 
     %initilaze binary images of the 4 edges
     leftEdgeIm = false(size(edge,1),size(edge,2));
@@ -94,15 +86,23 @@ function puzzlePiece = preProcess(number, filename)
     bottom = Edge(bottomEdgeIm,getEdgeType(bottomEdgeIm, 2),[lowerRight; lowerLeft]);
     left = Edge(leftEdgeIm,getEdgeType(leftEdgeIm, 3),[lowerLeft; upperLeft]);
 
+    %Create PuzzlePiece object
     puzzlePiece = PuzzlePiece(number,edge,[top,right,bottom,left]);
+    
+    %figure
+    %imshow(edge);
+    %hold on;
+    %plot(upperLeft(1),upperLeft(2),'*');
+    %plot(upperRight(1),upperRight(2),'*');
+    %plot(lowerLeft(1),lowerLeft(2),'*');
+    %plot(lowerRight(1),lowerRight(2),'*');
+    %title(['puzzle piece ',num2str(number)]);
 end
 
 
 function edgeType = getEdgeType(edge, direction)
     angle = direction * 90;
     edge = imrotate(edge,angle);
-    %figure
-    %imshow(edge);
     [y,x] = find(edge);
     z=polyfit(x,y,2);
     if abs(z(1)) < 0.001
@@ -137,7 +137,7 @@ function y = getY(x,lineEquation)
 y = lineEquation(1) * (x - lineEquation(3)) + lineEquation(2);
 end
 
-function vertex = getVertexFromSelections(row,col,selectedr,selectedc)
+function vertex = getVertexFromUser(row,col,selectedr,selectedc)
 	min = abs(row(1)-selectedr) + abs(col(1)-selectedc);
 	for i = 2:size(row,1)
             sum = abs(row(i)-selectedr) + abs(col(i)-selectedc);

@@ -1,6 +1,6 @@
-n = 108;
-m = 108;
-distanceSensitivity = 15;
+n = 108; %The number of puzzle pieces
+endpointsDistanceThreshold = 15; %The maximum difference between the endpoint distances of two edges that may be compatible
+startIndex = 2; %Indicate which of the four corner puzzle pieces to start assembling the puzzle
 corner0Tab = PuzzlePiece.empty();
 corner1Tab = PuzzlePiece.empty();
 corner2Tab = PuzzlePiece.empty();
@@ -18,7 +18,8 @@ internal2TabOpposite = PuzzlePiece.empty();
 internal2TabAdjacent = PuzzlePiece.empty();
 internal3Tab = PuzzlePiece.empty();
 internal4Tab = PuzzlePiece.empty();
-for i = 1:m
+%Process all puzzle pictures and store them in various arrays according to their types
+for i = 1:n
     puzzlePiece = preProcess(i,['puzzleIm\puzzle_',num2str(i),'.jpg']);
     switch puzzlePiece.type
         case '0-tab corner piece'
@@ -58,11 +59,11 @@ for i = 1:m
     end      
 end
 
+%Choose a corner puzzle piece as the starting puzzle piece
 startPool = [corner0Tab, corner1Tab, corner2Tab];
-
 firstRow = PuzzlePiece.empty();
 firstRowNumOnly = zeros();
-firstRow(1) = startPool(2);
+firstRow(1) = startPool(startIndex);
 firstRowNumOnly(1) = firstRow(1).num;
 firstRow(1).splicedOn = 1;
 for a = 1:4
@@ -71,9 +72,10 @@ for a = 1:4
     end
 end
 
+%Assemble the first row of the puzzle
 meetLast = 0;
 i = 2;
-
+errorCorrection = 0;
 while(~meetLast)
     leftNotch = firstRow(i-1).edges(firstRow(i-1).afterRotation(2));
     switch leftNotch.type
@@ -85,7 +87,7 @@ while(~meetLast)
     incompatibilities = int16.empty(0,3);
     for a = 1:size(searchPool,2)
         for b = 1:4
-            if searchPool(a).edges(b).type + leftNotch.type == 0 && searchPool(a).splicedOn == 0 && abs(searchPool(a).edges(b).endpointsDistance - leftNotch.endpointsDistance) <= distanceSensitivity
+            if searchPool(a).edges(b).type + leftNotch.type == 0 && searchPool(a).splicedOn == 0 && abs(searchPool(a).edges(b).endpointsDistance - leftNotch.endpointsDistance) <= endpointsDistanceThreshold
                 incompatibility = getIncompatibleArea(leftNotch, searchPool(a).edges(b), firstRow(i-1).afterRotation(2), b);
                 incompatibilities = [incompatibilities; incompatibility, a, b];
             end
@@ -93,28 +95,71 @@ while(~meetLast)
     end
     if isempty(incompatibilities)
         fprintf('Cannot find a puzzle piece for position (1,%d)\n',i);
-        fprintf('Currently the frist row of the puzzle is: \n');
+        fprintf('Currently the puzzle is: \n');
         disp(firstRowNumOnly);
-        fprintf('\n------------------------------------------------------\n\n');
-        return;
+        fprintf('Please follow the above to assemble the first row of the puzzle and enter where the error started.\n');
+        c = input('Plase enter the col number of the error: ');
+        fprintf('\nBack to position (1,%d)...\n', c);
+            for a = i:-1:c
+                firstRow(a).splicedOn = 0;
+                firstRow(a).afterRotation = [1,2,3,4];
+            end
+        i = c;
+        firstRow = firstRow(1:i-1);
+        firstRowNumOnly = firstRowNumOnly(1:i-1);
+        errorCorrection = 1;
+        continue;
     end
     incompatibilities = sortrows(incompatibilities,1);
-    firstRow(i) = searchPool(incompatibilities(1,2));
-    firstRow(i).afterRotation = [mod((incompatibilities(1,3)+1)-1,4)+1,mod((incompatibilities(1,3)+2)-1,4)+1,mod((incompatibilities(1,3)+3)-1,4)+1,incompatibilities(1,3)];
+    if errorCorrection
+        fprintf('\nError Correction:\n');
+        fprintf('Plase selecte a puzzle piece for position (1,%d)\n',i);
+        fprintf('The following are the candidate puzzle pieces and their incompatibility score: \n');
+        for a = 1:size(incompatibilities,1)
+            fprintf('Index: %d | Puzzle pieces: %d | Incompatibility score: %d\n',a, searchPool(incompatibilities(a,2)).num, incompatibilities(a,1));
+        end
+        x = input('enter the index of the puzzle pieces selected: ');
+        selected = incompatibilities(x,:);
+        errorCorrection = 0;
+        fprintf('\n------------------------------------------------------\n\n');
+    else
+        selected = incompatibilities(1,:);
+    end
+    firstRow(i) = searchPool(selected(2));
+    firstRow(i).afterRotation = [mod((selected(3)+1)-1,4)+1,mod((selected(3)+2)-1,4)+1,mod((selected(3)+3)-1,4)+1,selected(3)];
     firstRow(i).splicedOn = 1;
+    firstRowNumOnly(i) = searchPool(selected(2)).num;
     meetLast = contains(firstRow(i).type,'corner');
-    firstRowNumOnly(i) = searchPool(incompatibilities(1,2)).num;
+    if meetLast
+        fprintf('First row is complete!\n');
+        fprintf('Currently the first row is: \n');
+        disp(firstRowNumOnly);
+        fprintf('Please follow the above to assemble the first row of the puzzle.\n');
+        error = input('If you find any errors, please enter 1, otherwise enter 0: ');
+        if error
+            c = input('Plase enter the col number of the error: ');
+            fprintf('\nBack to position (1,%d)...\n', c);
+                for a = i:-1:c
+                    firstRow(a).splicedOn = 0;
+                    firstRow(a).afterRotation = [1,2,3,4];
+                end
+            i = c;
+            firstRow = firstRow(1:i-1);
+            firstRowNumOnly = firstRowNumOnly(1:i-1);
+            errorCorrection = 1;
+            meetLast = 0;
+            continue;
+        end
+    end
     i = i+1;
 end
 
-fprintf('The frist row of the puzzle is: \n');
-disp(firstRowNumOnly);
 fprintf('\n------------------------------------------------------\n\n');
 
+%Assemble the rest of the puzzle
 puzzle = firstRow;
 puzzleNumOnly = firstRowNumOnly;
 errorCorrection = 0;
-
 i = 2;
 while i <= n/size(firstRow,2)
     j = 1;
@@ -138,7 +183,7 @@ while i <= n/size(firstRow,2)
             incompatibilities = int16.empty(0,3);
             for a = 1:size(searchPool,2)
                 for b = 1:4
-                    if searchPool(a).edges(b).type + topNotch.type == 0 && searchPool(a).edges(mod((b-1)-1,4)+1).type == 0 && searchPool(a).splicedOn == 0 && abs(searchPool(a).edges(b).endpointsDistance - topNotch.endpointsDistance) <= distanceSensitivity
+                    if searchPool(a).edges(b).type + topNotch.type == 0 && searchPool(a).edges(mod((b-1)-1,4)+1).type == 0 && searchPool(a).splicedOn == 0 && abs(searchPool(a).edges(b).endpointsDistance - topNotch.endpointsDistance) <= endpointsDistanceThreshold
                         incompatibility = getIncompatibleArea(topNotch, searchPool(a).edges(b), puzzle(i-1,j).afterRotation(3), b);
                         incompatibilities = [incompatibilities; incompatibility, a, b];
                     end
@@ -148,7 +193,7 @@ while i <= n/size(firstRow,2)
                 fprintf('Cannot find a puzzle piece for position (%d,%d)\n',i,j);
                 fprintf('Currently the puzzle is: \n');
                 disp(puzzleNumOnly);
-                fprintf('Please follow the above to put the puzzle from left to right, from top to bottom, and enter where the error started.\n');
+                fprintf('Please follow the above to assemble the puzzle from left to right, from top to bottom, and enter where the error started.\n');
                 r = input('Plase enter the row number of the error: ');
                 c = input('Plase enter the col number of the error: ');
                 fprintf('\nBack to position (%d,%d)...\n', r, c);
@@ -167,13 +212,12 @@ while i <= n/size(firstRow,2)
                 continue;
             end
             incompatibilities = sortrows(incompatibilities,1);
-            candidates = incompatibilities(1,:);
             if errorCorrection
                 fprintf('\nError Correction:\n');
                 fprintf('Plase selecte a puzzle piece for position (%d,%d)\n',i,j);
-                fprintf('The following are the candidate puzzle pieces and their incompatibility: \n');
+                fprintf('The following are the candidate puzzle pieces and their incompatibility score: \n');
                 for a = 1:size(incompatibilities,1)
-                    fprintf('Index: %d | Puzzle pieces: %d | Incompatibility: %d\n',a, searchPool(incompatibilities(a,2)).num, incompatibilities(a,1));
+                    fprintf('Index: %d | Puzzle pieces: %d | Incompatibility score: %d\n',a, searchPool(incompatibilities(a,2)).num, incompatibilities(a,1));
                 end
                 x = input('enter the index of the puzzle pieces selected: ');
                 selected = incompatibilities(x,:);
@@ -231,7 +275,7 @@ while i <= n/size(firstRow,2)
                             elseif i == n/size(firstRow,2)
                                 searchPool = [edge0Tab, edge1TabLeft];
                             elseif j == size(firstRow,2)
-                                searchPool = [edge1TabLeft, edge1TabRight];
+                                searchPool = [edge0Tab, edge1TabRight];
                             else
                                 searchPool = [internal0Tab, internal1Tab, internal2TabAdjacent];
                             end
@@ -240,7 +284,7 @@ while i <= n/size(firstRow,2)
             incompatibilities = int16.empty(0,3);
             for a = 1:size(searchPool,2)
                 for b = 1:4
-                    if searchPool(a).splicedOn == 0 && searchPool(a).edges(b).type + leftNotch.type == 0 && searchPool(a).edges(mod((b+1)-1,4)+1).type + topNotch.type == 0 && abs(searchPool(a).edges(b).endpointsDistance - leftNotch.endpointsDistance) <= distanceSensitivity && abs(searchPool(a).edges(mod((b+1)-1,4)+1).endpointsDistance - topNotch.endpointsDistance) <= distanceSensitivity
+                    if searchPool(a).splicedOn == 0 && searchPool(a).edges(b).type + leftNotch.type == 0 && searchPool(a).edges(mod((b+1)-1,4)+1).type + topNotch.type == 0 && abs(searchPool(a).edges(b).endpointsDistance - leftNotch.endpointsDistance) <= endpointsDistanceThreshold && abs(searchPool(a).edges(mod((b+1)-1,4)+1).endpointsDistance - topNotch.endpointsDistance) <= endpointsDistanceThreshold
                         leftIncompatibility = getIncompatibleArea(leftNotch, searchPool(a).edges(b), puzzle(i,j-1).afterRotation(2), b);
                         topIncompatibility = getIncompatibleArea(topNotch, searchPool(a).edges(mod((b+1)-1,4)+1), puzzle(i-1,j).afterRotation(3), mod((b+1)-1,4)+1);
                         incompatibility = leftIncompatibility + topIncompatibility;
@@ -252,7 +296,7 @@ while i <= n/size(firstRow,2)
                 fprintf('Cannot find a puzzle piece for position (%d,%d)\n',i,j);
                 fprintf('Currently the puzzle is: \n');
                 disp(puzzleNumOnly);
-                fprintf('Please follow the above to splice the puzzle from left to right, from top to bottom, and enter where the error started.\n');
+                fprintf('Please follow the above to assemble the puzzle from left to right, from top to bottom, and enter where the error started.\n');
                 r = input('Plase enter the row number of the error: ');
                 c = input('Plase enter the col number of the error: ');
                 fprintf('\nBack to position (%d,%d)...\n', r, c);
@@ -271,10 +315,10 @@ while i <= n/size(firstRow,2)
                 continue;
             end
             if i == n/size(firstRow,2) && j == size(firstRow,2)
-                fprintf('Almost completed!\n');
+                fprintf('Almost complete!\n');
                 fprintf('Currently the puzzle is: \n');
                 disp(puzzleNumOnly);
-                fprintf('Please follow the above to splice the puzzle from left to right, from top to bottom.\n');
+                fprintf('Please follow the above to assemble the puzzle from left to right, from top to bottom.\n');
                 error = input('If you find any errors, please enter 1, otherwise enter 0: ');
                 if error
                     r = input('Plase enter the row number of the error started: ');
@@ -296,7 +340,6 @@ while i <= n/size(firstRow,2)
                 end
             end
             incompatibilities = sortrows(incompatibilities,1);
-            candidates = incompatibilities(1,:);
             if errorCorrection
                 fprintf('\nError Correction:\n');
                 fprintf('Plase selecte a puzzle piece for position (%d,%d)\n',i,j);
@@ -321,7 +364,7 @@ while i <= n/size(firstRow,2)
         end
     end
     if ~errorCorrection
-        fprintf('\nRow %d completed.\n', i);
+        fprintf('\nRow %d complete.\n', i);
         fprintf('Currently the puzzle is: \n');
         disp(puzzleNumOnly);
         fprintf('\n------------------------------------------------------\n\n');
@@ -329,6 +372,6 @@ while i <= n/size(firstRow,2)
     end
 end
 
-fprintf('Assemble completed!\n');
+fprintf('Assemble complete!\n');
 fprintf('The puzzle is: \n');
 disp(puzzleNumOnly);

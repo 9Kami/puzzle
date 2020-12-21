@@ -4,7 +4,6 @@ classdef PuzzlePiece < handle
         image;
         edges;
         type;
-        edgeType;
         afterRotation;
         splicedOn;
     end
@@ -16,7 +15,6 @@ classdef PuzzlePiece < handle
                 obj.image = image;
                 obj.edges = edges;
                 edgeType = [edges(1).type, edges(2).type, edges(3).type, edges(4).type,];
-                obj.edgeType = edgeType;
                 obj.splicedOn = 0;
                 obj.afterRotation = 0;
                 numOfTabs = 0;
